@@ -35,11 +35,13 @@ const css = `
 
 app.get("/", async (req, res) => {
   const { rows } = await pool.query(
-    "SELECT person.name AS name, post.post_text AS post_text FROM post RIGHT JOIN person ON person.id = post.person_id"
+    "SELECT person.id AS person_id, person.name AS name, post.post_text AS post_text FROM post RIGHT JOIN person ON person.id = post.person_id"
   );
   res.send(`
     ${css}
     <h1>People and their posts: </h1>
+    <label for="new-post-text">Create a post: </label>
+    <textarea id="new-post-text" value="My first post!"></textarea>
     <table>
       <tr>
         <th>Name</th>
@@ -47,9 +49,19 @@ app.get("/", async (req, res) => {
       </tr>
       ${rows
         .map(
-          (row: { name: string; post_text: string | null }) => `
+          (row: {
+            person_id: string;
+            name: string;
+            post_text: string | null;
+          }) => `
         <tr>
-          <td>${row.name}</td>
+          <td>${row.name}
+            ${
+              row.post_text === null
+                ? `<br>
+                  <button onclick="window.location.href=\`/create-post?person_id=${row.person_id}&text=\${document.getElementById('new-post-text').value||'my%20first%20post!'}\`">Create Post</button>`
+                : ""
+            }</td>
           <td>${row.post_text ?? "No posts from this user"}</td>
         </tr>`
         )
@@ -57,6 +69,23 @@ app.get("/", async (req, res) => {
         .replace(/,/g, "")}
     </table>
   `);
+});
+
+app.get("/create-post", (req, res) => {
+  const { person_id: personId, text } = req.query;
+  try {
+    pool
+      .query(
+        "INSERT INTO post (id, person_id, post_text) VALUES (uuid_generate_v4(), $1, $2)",
+        [personId, text]
+      )
+      .then(() => {
+        res.redirect("/");
+      });
+  } catch (err) {
+    console.error(err);
+    res.send("<h1>There was an error. Please try again later :(</h1>");
+  }
 });
 
 app.get("/people", async (req, res) => {
